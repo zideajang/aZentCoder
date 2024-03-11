@@ -8,10 +8,11 @@ __all__ = ("CodeBlock", "CodeResult", "CodeExtractor", "CodeExecutor")
 
 
 class CodeBlock(BaseModel):
-    """(Experimental) A class that represents a code block."""
+    """(Experimental) 这个类用于表示代码块"""
 
+    # 要执行的代码
     code: str = Field(description="The code to execute.")
-
+    # 代码语言类别
     language: str = Field(description="The language of the code.")
 
 
@@ -43,7 +44,7 @@ class CodeExecutor(Protocol):
     """(Experimental) A code executor class that executes code blocks and returns the result."""
 
     class UserCapability(Protocol):
-        """(Experimental) An AgentCapability class that gives agent ability use this code executor."""
+        """(Experimental)  AgentCapability 类是赋予 agent 使用 code 执行器的能力"""
 
         def add_to_agent(self, agent: LLMAgent) -> None:
             ...  # pragma: no cover

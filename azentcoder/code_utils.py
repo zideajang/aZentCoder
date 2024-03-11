@@ -1,5 +1,9 @@
+import logging
 import os
+import pathlib
 import re
+import string
+import subprocess
 import sys
 import time
 
@@ -13,7 +17,12 @@ except ImportError:
     docker = None
 
 CODE_BLOCK_PATTERN = r"```[ \t]*(\w+)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```"
-
+WORKING_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extensions")
+UNKNOWN = "unknown"
+TIMEOUT_MSG = "Timeout"
+DEFAULT_TIMEOUT = 600
+WIN32 = sys.platform == "win32"
+PATH_SEPARATOR = WIN32 and "\\" or "/"
 import logging
 
 # import rich
@@ -50,7 +59,39 @@ def infer_lang(code):
     except SyntaxError:
         # not a valid python code
         return UNKNOWN
-    
+
+def get_powershell_command():
+    try:
+        result = subprocess.run(["powershell", "$PSVersionTable.PSVersion.Major"], capture_output=True, text=True)
+        if result.returncode == 0:
+            return "powershell"
+
+    except FileNotFoundError:
+        # This means that 'powershell' command is not found so now we try looking for 'pwsh'
+        try:
+            result = subprocess.run(
+                ["pwsh", "-Command", "$PSVersionTable.PSVersion.Major"], capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                return "pwsh"
+
+        except FileNotFoundError:
+            if WIN32:
+                logging.warning("Neither powershell nor pwsh is installed but it is a Windows OS")
+            return None
+
+
+powershell_command = get_powershell_command()
+
+def _cmd(lang):
+    if lang.startswith("python") or lang in ["bash", "sh", powershell_command]:
+        return lang
+    if lang in ["shell"]:
+        return "sh"
+    if lang in ["ps1", "pwsh", "powershell"]:
+        return powershell_command
+
+    raise NotImplementedError(f"{lang} not recognized in code execution")
 
 def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> Tuple[str, float]:
     """(openai<1) Generate code.

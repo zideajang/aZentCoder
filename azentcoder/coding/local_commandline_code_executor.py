@@ -7,7 +7,7 @@ from typing import ClassVar, List, Optional, Union
 from pydantic import Field
 
 from ..developerchat.agent import LLMAgent
-from ..code_utils import execute_code
+# from ..code_utils import execute_code
 from .base import CodeBlock, CodeExecutor, CodeExtractor, CodeResult
 from .markdown_code_extractor import MarkdownCodeExtractor
 

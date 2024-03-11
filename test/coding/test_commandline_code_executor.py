@@ -4,7 +4,7 @@ import tempfile
 import pytest
 
 
-from azentcoder.agentchat.conversable_agent import ConversableAgent
+# from azentcoder.agentchat.conversable_agent import ConversableAgent
 from azentcoder.code_utils import is_docker_running
 from azentcoder.coding.base import CodeBlock, CodeExecutor
 from azentcoder.coding.factory import CodeExecutorFactory
