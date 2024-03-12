@@ -25,14 +25,8 @@
 - stop_container 也就是 python 进程退退出后停止容器，默认值为 True
 
 
-```python
-def _wait_for_ready(container: Container, timeout: int = 60, stop_time: int = 0.1) -> None:
-    elapsed_time = 0
-    while container.status != "running" and elapsed_time < timeout:
-        sleep(stop_time)
-        elapsed_time += stop_time
-        container.reload()
-        continue
-    if container.status != "running":
-        raise ValueError("Container failed to start")
-```
+本地执行的代码
+将每个代码块都保存为一个文件，然后放在工作目录下来执行，这些文件执行的顺序是按照接受的顺序。通过正则表达式来检查代码中可能存在危害或者风险的代码。避免对用户环境造成潜在影响，目前只支持 python 和 shell 脚本语言
+- 对于 python 代码，使用 python 来执行代码
+- 对于 shell 脚本，代码块应使用 bash 、 shell 或 sh 语言执行代码块
+

@@ -9,12 +9,12 @@ import time
 
 from pydantic import BaseModel
 
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+import docker
 
-try:
-    import docker
-except ImportError:
-    docker = None
+SENTINEL = object()
+DEFAULT_MODEL = "gpt-4"
+FAST_MODEL = "gpt-3.5-turbo"
 
 CODE_BLOCK_PATTERN = r"```[ \t]*(\w+)?[ \t]*\r?\n(.*?)\r?\n[ \t]*```"
 WORKING_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extensions")
@@ -24,25 +24,33 @@ DEFAULT_TIMEOUT = 600
 WIN32 = sys.platform == "win32"
 PATH_SEPARATOR = WIN32 and "\\" or "/"
 import logging
+logger = logging.getLogger(__name__)
+
 
 # import rich
 UNKNOWN = "unknown"
 
-class CodeContent(BaseModel):
-    pass
-    
-
-def content_str(content: Union[str, List]) -> str:
-    if type(content) is str:
+def content_str(content: Union[str, List[Dict[str, Any]], None]) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
         return content
+    if not isinstance(content, list):
+        raise TypeError(f"content must be None, str, or list, but got {type(content)}")
+
     rst = ""
     for item in content:
+        if not isinstance(item, dict):
+            raise TypeError("Wrong content format: every element should be dict if the content is a list.")
+        assert "type" in item, "Wrong content format. Missing 'type' key in content's dict."
         if item["type"] == "text":
             rst += item["text"]
-        else:
-            assert isinstance(item, dict) and item["type"] == "image_url", "Wrong content format."
+        elif item["type"] == "image_url":
             rst += "<image>"
+        else:
+            raise ValueError(f"Wrong content format: unknown type {item['type']} within the content")
     return rst
+
 
 
 def infer_lang(code):
@@ -59,6 +67,26 @@ def infer_lang(code):
     except SyntaxError:
         # not a valid python code
         return UNKNOWN
+
+def extract_code(
+    text: Union[str, List], pattern: str = CODE_BLOCK_PATTERN, detect_single_line_code: bool = False
+) -> List[Tuple[str, str]]:
+    text = content_str(text)
+    if not detect_single_line_code:
+        match = re.findall(pattern, text, flags=re.DOTALL)
+        return match if match else [(UNKNOWN, text)]
+    code_pattern = re.compile(CODE_BLOCK_PATTERN + r"|`([^`]+)`")
+    code_blocks = code_pattern.findall(text)
+    extracted = []
+    for lang, group1, group2 in code_blocks:
+        if group1:
+            extracted.append((lang.strip(), group1.strip()))
+        elif group2:
+            extracted.append(("", group2.strip()))
+
+    return extracted
+
+
 
 def get_powershell_command():
     try:
@@ -80,6 +108,16 @@ def get_powershell_command():
                 logging.warning("Neither powershell nor pwsh is installed but it is a Windows OS")
             return None
 
+def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> Tuple[str, float]:
+    pass
+
+_IMPROVE_FUNCTION_CONFIG = {
+    "prompt": """Improve the function '{func_name}' to achieve the objective '{objective}'.
+The current implementation of the function is as follows:
+{file_string}""",
+    "model": DEFAULT_MODEL,
+    "request_timeout": 600,
+}
 
 powershell_command = get_powershell_command()
 
@@ -93,18 +131,23 @@ def _cmd(lang):
 
     raise NotImplementedError(f"{lang} not recognized in code execution")
 
-def generate_code(pattern: str = CODE_BLOCK_PATTERN, **config) -> Tuple[str, float]:
-    """(openai<1) Generate code.
+def improve_function(file_name, func_name, objective, **config):
+    """(openai<1) Improve the function to achieve the objective."""
+    params = {**_IMPROVE_FUNCTION_CONFIG, **config}
+    # read the entire file into a str
+    with open(file_name, "r") as f:
+        file_string = f.read()
 
-    Args:
-        pattern (Optional, str): The regular expression pattern for finding the code block.
-            The default pattern is for finding a code block in a markdown file.
-        config (Optional, dict): The configuration for the API call.
+    return ""
+    # response = oai.Completion.create(
+    #     {"func_name": func_name, "objective": objective, "file_string": file_string}, **params
+    # )
+    # return oai.Completion.extract_text(response)[0], response["cost"]
 
-    Returns:
-        str: The generated code.
-        float: The cost of the generation.
-    """
-    # response = oai.Completion.create(**config)
-    response = None
-    return extract_code(oai.Completion.extract_text(response)[0], pattern), response["cost"]
+_IMPROVE_CODE_CONFIG = {
+    "prompt": """Analyze the code in the following files and return a list of suggestions for improvement{followup}, to achieve the objective of '{objective}'.
+{code}
+""",
+    "model": DEFAULT_MODEL,
+    "request_timeout": 900,
+}
